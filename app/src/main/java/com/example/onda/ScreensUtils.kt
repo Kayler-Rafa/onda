@@ -31,7 +31,10 @@ import org.json.JSONObject
 import java.io.IOException
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
-
+import java.io.File
+import java.io.FileWriter
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 @Composable
 fun LoginScreen(
@@ -155,13 +158,14 @@ fun performLogin(
 ) {
     val client = OkHttpClient()
 
-    // Montando a requisição
+    // Construindo a URL com os parâmetros de email e senha
+    val url = "https://onda-tec-ia88wrett-rafael-dinizs-projects.vercel.app/alunos/login?email=$email&senha=$senha"
+
+    // Montando a requisição GET
     val request = Request.Builder()
-        .url("https://onda-tec-ia88wrett-rafael-dinizs-projects.vercel.app/alunos/login?email=${email}&senha=${senha}")
-        .addHeader("Content-Type", "application/json")
-        .addHeader("userType", userType)
-        .addHeader("email", email)
-        .addHeader("senha", senha)
+        .url(url)
+        .addHeader("Content-Type", "application/json") // Cabeçalho opcional
+        .addHeader("userType", userType) // Incluindo userType se for necessário
         .build()
 
     // Realizando a requisição
@@ -186,6 +190,18 @@ fun performLogin(
 
                     if (success) {
                         Log.d("LoginFlow", "Login bem-sucedido")
+
+                        // Salva o CSV com email e senha
+                        try {
+                            val file = File(context.filesDir, "user_credentials.csv")
+                            val writer = FileWriter(file)
+                            writer.append("$email,$senha")
+                            writer.close()
+                            Log.d("LoginFlow", "Credenciais salvas no CSV.")
+                        } catch (e: IOException) {
+                            Log.e("LoginFlow", "Erro ao salvar as credenciais no CSV: ${e.message}")
+                        }
+
                         onLoginSuccess()
                     } else {
                         val message = json.optString("message", "Erro desconhecido.")
