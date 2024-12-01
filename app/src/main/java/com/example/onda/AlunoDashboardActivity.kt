@@ -1,6 +1,7 @@
 package com.example.onda
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -15,24 +16,30 @@ import com.example.onda.ui.theme.OndaTheme
 class AlunoDashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("AlunoDashboardActivity", "AlunoDashboardActivity iniciada")
         setContent {
             OndaTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.Black
+                    color = Color.Black // Fundo preto
                 ) {
                     Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Bem-vindo ao Dashboard do Aluno!",
-                            fontSize = 20.sp,
-                            color = Color.White
+                            text = "Bem-vindo, Aluno!",
+                            color = Color.White,
+                            fontSize = 24.sp
                         )
                     }
                 }
             }
+        }
+        try {
+            // Configurações da tela
+        } catch (e: Exception) {
+            Log.e("AlunoDashboardActivity", "Erro ao carregar atividade: ${e.message}")
         }
     }
 }

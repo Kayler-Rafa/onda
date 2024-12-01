@@ -1,7 +1,10 @@
 package com.example.onda
 
+import android.util.Log
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,18 +25,29 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import androidx.compose.ui.draw.clip
+import org.json.JSONException
+import okhttp3.*
+import org.json.JSONObject
+import java.io.IOException
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+
 
 @Composable
 fun LoginScreen(
     userType: String,
     onLoginSuccess: (String) -> Unit
 ) {
+    val context = LocalContext.current // Obtenha o contexto para navegação
     var email by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .background(Color.Black),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -41,15 +55,18 @@ fun LoginScreen(
         Image(
             painter = painterResource(id = R.drawable.ondatec),
             contentDescription = "OndaTec",
-            modifier = Modifier.fillMaxWidth().height(100.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
         )
 
         // Imagem do Aluno/Professor
         Image(
             painter = painterResource(id = if (userType == "Aluno") R.drawable.aluno else R.drawable.professor),
             contentDescription = "$userType",
-            modifier = Modifier.size(200.dp)
-                .clip(CircleShape) // Formato circular
+            modifier = Modifier
+                .size(200.dp)
+                .clip(CircleShape)
         )
 
         // Campos de entrada e botão de login
@@ -90,17 +107,32 @@ fun LoginScreen(
                 // Botão de Login
                 Button(
                     onClick = {
-                        performLogin(userType, email, senha, onLoginSuccess) { error ->
-                            errorMessage = error
-                        }
+                        Log.d("LoginFlow", "Botão de login pressionado")
+                        performLogin(
+                            userType = userType,
+                            email = email,
+                            senha = senha,
+                            context = context,
+                            onLoginSuccess = {
+                                Log.d("LoginFlow", "Navegando para o Dashboard")
+                                onLoginSuccess(userType) // Callback
+                            },
+                            onError = { error ->
+                                errorMessage = error
+                                Log.e("LoginFlow", "Erro: $error")
+                            }
+                        )
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (userType == "Aluno") Color(0xFF6200EA) else Color(0xFF4CAF50)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (userType == "Aluno") Color(0xFF6200EA) else Color(0xFF4CAF50)
+                    ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(text = "LOGIN", color = Color.White, fontSize = 16.sp)
                 }
 
+                // Exibição de mensagens de erro
                 if (errorMessage.isNotEmpty()) {
                     Text(
                         text = errorMessage,
@@ -117,40 +149,56 @@ fun performLogin(
     userType: String,
     email: String,
     senha: String,
-    onSuccess: (String) -> Unit,
+    context: Context,
+    onLoginSuccess: () -> Unit,
     onError: (String) -> Unit
 ) {
-    val url = if (userType == "Aluno") {
-        "https://onda-tec-ia88wrett-rafael-dinizs-projects.vercel.app/alunos/login?email=$email&senha=$senha"
-    } else {
-        "https://onda-tec-ia88wrett-rafael-dinizs-projects.vercel.app/professores/login?email=$email&senha=$senha"
-    }
+    val client = OkHttpClient()
 
-    CoroutineScope(Dispatchers.IO).launch {
-        try {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
+    // Montando a requisição
+    val request = Request.Builder()
+        .url("https://onda-tec-ia88wrett-rafael-dinizs-projects.vercel.app/alunos/login?email=${email}&senha=${senha}")
+        .addHeader("Content-Type", "application/json")
+        .addHeader("userType", userType)
+        .addHeader("email", email)
+        .addHeader("senha", senha)
+        .build()
 
-            val responseCode = connection.responseCode
-            val responseBody = connection.inputStream.bufferedReader().use { it.readText() }
+    // Realizando a requisição
+    client.newCall(request).enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            Log.e("LoginFlow", "Erro na requisição: ${e.message}")
+            onError("Erro ao conectar ao servidor. Verifique sua conexão.")
+        }
 
-            withContext(Dispatchers.Main) {
-                if (responseCode == 200 && responseBody.contains("\"success\":true")) {
-                    onSuccess(email)
-                } else if (responseBody.contains("Aluno não encontrado") || responseBody.contains("Professor não encontrado")) {
-                    onError("Usuário não encontrado.")
-                } else if (responseBody.contains("Senha incorreta")) {
-                    onError("Senha incorreta.")
-                } else {
-                    onError("Algo deu errado, tente novamente mais tarde.")
+        override fun onResponse(call: Call, response: Response) {
+            response.use {
+                if (!response.isSuccessful) {
+                    Log.e("LoginFlow", "Resposta não foi bem-sucedida: ${response.code}")
+                    onError("Erro ao realizar login: Credenciais inválidas.")
+                    return
+                }
+
+                try {
+                    val responseBody = response.body?.string()
+                    val json = JSONObject(responseBody ?: "")
+                    val success = json.optBoolean("sucess", false)
+
+                    if (success) {
+                        Log.d("LoginFlow", "Login bem-sucedido")
+                        onLoginSuccess()
+                    } else {
+                        val message = json.optString("message", "Erro desconhecido.")
+                        Log.e("LoginFlow", "Falha no login: $message")
+                        onError(message)
+                    }
+                } catch (e: Exception) {
+                    Log.e("LoginFlow", "Erro ao processar resposta: ${e.message}")
+                    onError("Erro ao processar a resposta do servidor.")
                 }
             }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                onError("Algo deu errado, tente novamente mais tarde.")
-            }
         }
-    }
+    })
 }
 
 @Composable
