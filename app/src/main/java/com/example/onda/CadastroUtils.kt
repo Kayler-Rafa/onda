@@ -1,7 +1,7 @@
 package com.example.onda
 
+import android.content.Context
 import android.util.Log
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,27 +21,16 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import androidx.compose.ui.draw.clip
-import org.json.JSONException
+import androidx.compose.ui.platform.LocalContext
 import okhttp3.*
 import org.json.JSONObject
 import java.io.IOException
-import androidx.compose.ui.platform.LocalContext
-import android.content.Context
-import java.io.File
-import java.io.FileWriter
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 
 @Composable
-fun LoginScreen(
-    userType: String,
-    onLoginSuccess: (String) -> Unit
+fun CadastroScreen(
+    onCadastroSuccess: () -> Unit
 ) {
-    val context = LocalContext.current // Obtenha o contexto para navegação
+    val context = LocalContext.current
     var email by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
@@ -63,16 +52,16 @@ fun LoginScreen(
                 .height(100.dp)
         )
 
-        // Imagem do Aluno/Professor
+        // Imagem do Aluno
         Image(
-            painter = painterResource(id = if (userType == "Aluno") R.drawable.aluno else R.drawable.professor),
-            contentDescription = "$userType",
+            painter = painterResource(id = R.drawable.aluno),
+            contentDescription = "Cadastro",
             modifier = Modifier
                 .size(200.dp)
                 .clip(CircleShape)
         )
 
-        // Campos de entrada e botão de login
+        // Campos de entrada e botão de cadastro
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = Color.White,
@@ -85,7 +74,7 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Login",
+                    text = "Cadastro",
                     fontSize = 24.sp,
                     color = Color.Black
                 )
@@ -107,32 +96,24 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Botão de Login
+                // Botão de Cadastro
                 Button(
                     onClick = {
-                        Log.d("LoginFlow", "Botão de login pressionado")
-                        performLogin(
-                            userType = userType,
+                        performCadastro(
                             email = email,
                             senha = senha,
                             context = context,
-                            onLoginSuccess = {
-                                Log.d("LoginFlow", "Navegando para o Dashboard")
-                                onLoginSuccess(userType) // Callback
-                            },
+                            onCadastroSuccess = onCadastroSuccess,
                             onError = { error ->
                                 errorMessage = error
-                                Log.e("LoginFlow", "Erro: $error")
                             }
                         )
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (userType == "Aluno") Color(0xFF6200EA) else Color(0xFF4CAF50)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EA)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(text = "LOGIN", color = Color.White, fontSize = 16.sp)
+                    Text(text = "CADASTRAR", color = Color.White, fontSize = 16.sp)
                 }
 
                 // Exibição de mensagens de erro
@@ -148,91 +129,53 @@ fun LoginScreen(
     }
 }
 
-fun performLogin(
-    userType: String,
+fun performCadastro(
     email: String,
     senha: String,
     context: Context,
-    onLoginSuccess: () -> Unit,
+    onCadastroSuccess: () -> Unit,
     onError: (String) -> Unit
 ) {
     val client = OkHttpClient()
 
-    // Construindo a URL com os parâmetros de email e senha
-    val url = "http://ec2-18-118-95-36.us-east-2.compute.amazonaws.com:3001/alunos/login?email=$email&senha=$senha"
+    val url = "http://ec2-18-118-95-36.us-east-2.compute.amazonaws.com:3001/alunos/create?email=$email&senha=$senha"
 
-    // Montando a requisição GET
     val request = Request.Builder()
         .url(url)
-        .addHeader("Content-Type", "application/json") // Cabeçalho opcional
-        .addHeader("userType", userType) // Incluindo userType se for necessário
+        .post(RequestBody.create(null, ByteArray(0))) // Corpo vazio
         .build()
 
-    // Realizando a requisição
     client.newCall(request).enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
-            Log.e("LoginFlow", "Erro na requisição: ${e.message}")
-            onError("Erro ao conectar ao servidor. Verifique sua conexão.")
+            Log.e("CadastroScreen", "Erro na requisição: ${e.message}")
+            CoroutineScope(Dispatchers.Main).launch {
+                onError("Erro ao conectar ao servidor. Verifique sua conexão.")
+            }
         }
 
         override fun onResponse(call: Call, response: Response) {
             response.use {
                 if (!response.isSuccessful) {
-                    Log.e("LoginFlow", "Resposta não foi bem-sucedida: ${response.code}")
-                    onError("Erro ao realizar login: Credenciais inválidas.")
+                    Log.e("CadastroScreen", "Resposta não foi bem-sucedida: ${response.code}")
+                    CoroutineScope(Dispatchers.Main).launch {
+                        onError("Erro ao realizar cadastro: ${response.message}")
+                    }
                     return
                 }
 
-                try {
-                    val responseBody = response.body?.string()
-                    val json = JSONObject(responseBody ?: "")
-                    val success = json.optBoolean("sucess", false)
+                val responseBody = response.body?.string()
+                val json = JSONObject(responseBody ?: "")
+                val success = json.optBoolean("success", false)
 
+                CoroutineScope(Dispatchers.Main).launch {
                     if (success) {
-                        Log.d("LoginFlow", "Login bem-sucedido")
-
-                        // Salva o CSV com email e senha
-                        try {
-                            val file = File(context.filesDir, "user_credentials.csv")
-                            val writer = FileWriter(file)
-                            writer.append("$email,$senha")
-                            writer.close()
-                            Log.d("LoginFlow", "Credenciais salvas no CSV.")
-                        } catch (e: IOException) {
-                            Log.e("LoginFlow", "Erro ao salvar as credenciais no CSV: ${e.message}")
-                        }
-
-                        onLoginSuccess()
+                        onCadastroSuccess()
                     } else {
                         val message = json.optString("message", "Erro desconhecido.")
-                        Log.e("LoginFlow", "Falha no login: $message")
                         onError(message)
                     }
-                } catch (e: Exception) {
-                    Log.e("LoginFlow", "Erro ao processar resposta: ${e.message}")
-                    onError("Erro ao processar a resposta do servidor.")
                 }
             }
         }
     })
 }
-
-@Composable
-fun CadastroScreen(
-    userType: String,
-    onCadastroSuccess: () -> Unit
-) {
-    var email by remember { mutableStateOf("") }
-    var senha by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Reutiliza a lógica da tela de cadastro
-        // Muito similar ao LoginScreen, mas muda a URL e o texto.
-    }
-}
-
