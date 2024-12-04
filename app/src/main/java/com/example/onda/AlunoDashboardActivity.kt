@@ -1,6 +1,5 @@
 package com.example.onda
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -82,7 +81,7 @@ fun AlunoDashboardScreen(
 
         // Imagem central
         Image(
-            painter = painterResource(id = R.drawable.livro), // Substitua por seu recurso de imagem
+            painter = painterResource(id = R.drawable.livro_icon), // Substitua por seu recurso de imagem
             contentDescription = "Livro",
             modifier = Modifier
                 .size(300.dp)
